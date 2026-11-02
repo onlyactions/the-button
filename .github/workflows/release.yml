@@ -1,0 +1,153 @@
+name: release
+
+# Every new commit on any branch builds every platform and publishes the
+# artifacts to GitHub Releases. (branches-only so the release tags created
+# below do not re-trigger this workflow.)
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  APPID: com.onlyactions.thebutton
+  GOGIO: gioui.org/cmd/gogio@v0.10.3
+  ANDROID_NDK_VERSION: 27.0.12077973
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install graphics dependencies
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q libegl-dev libgl-dev mesa-common-dev libvulkan-dev \
+            libwayland-dev libxkbcommon-dev libxkbcommon-x11-dev libxcb-xkb-dev \
+            libxfixes-dev libxrender-dev libx11-xcb-dev libxcursor-dev libx11-dev
+      - name: Build
+        run: go build -trimpath -ldflags='-s -w' -o the-button .
+      - name: Tarball
+        run: tar -czf the-button-linux-amd64.tar.gz the-button
+      - name: AppImage
+        run: sh packaging/appimage.sh the-button the-button-linux-x86_64.AppImage
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-linux
+          path: |
+            the-button-linux-amd64.tar.gz
+            the-button-linux-x86_64.AppImage
+          if-no-files-found: error
+
+  windows:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build windows/amd64
+        run: CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags='-s -w' -o the-button.exe .
+      - name: Build windows/arm64
+        run: CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -trimpath -ldflags='-s -w' -o the-button-arm64.exe .
+      - name: Package
+        run: |
+          zip -q the-button-windows-amd64.zip the-button.exe
+          zip -q the-button-windows-arm64.zip the-button-arm64.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-windows
+          path: '*.zip'
+          if-no-files-found: error
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android SDK (cmdline-tools, platform, build-tools, NDK)
+        run: |
+          ROOT="$HOME/android-sdk"
+          curl -fsSL -o /tmp/ct.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          mkdir -p "$ROOT/cmdline-tools"
+          unzip -q /tmp/ct.zip -d "$ROOT/cmdline-tools"
+          mv "$ROOT/cmdline-tools/cmdline-tools" "$ROOT/cmdline-tools/latest"
+          SDKM="$ROOT/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKM" --sdk_root="$ROOT" --licenses > /dev/null || true
+          "$SDKM" --sdk_root="$ROOT" --install "build-tools;34.0.0" \
+            "platforms;android-34" "ndk;${{ env.ANDROID_NDK_VERSION }}" > /dev/null
+          echo "ANDROID_HOME=$ROOT" >> "$GITHUB_ENV"
+      - name: Install gogio
+        run: go install "$GOGIO"
+      - name: Prepare stable debug keystore
+        run: mkdir -p "$HOME/.android" && cp debug.keystore "$HOME/.android/debug.keystore"
+      - name: Build APK
+        run: gogio -target android -minsdk 24 -icon icon.png -appid "$APPID" -o the-button.apk .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-android
+          path: the-button.apk
+          if-no-files-found: error
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install gogio
+        run: go install "$GOGIO"
+      - name: Build WebAssembly bundle
+        run: gogio -target js -o web .
+      - name: Package
+        run: zip -qr the-button-web.zip web
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-web
+          path: the-button-web.zip
+          if-no-files-found: error
+
+  release:
+    needs: [linux, windows, android, web]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v0.0.${{ github.run_number }}"
+          ls -la dist
+          NOTES=$(cat <<EOF
+          Automated build of the button (commit $(echo "$GITHUB_SHA" | cut -c1-7)).
+
+          - the-button-linux-amd64.tar.gz — Linux x86_64, plain binary
+          - the-button-linux-x86_64.AppImage — Linux AppImage (uses your system graphics driver; for broken GPU drivers: LIBGL_ALWAYS_SOFTWARE=1)
+          - the-button-windows-amd64.zip — Windows x86_64
+          - the-button-windows-arm64.zip — Windows ARM64
+          - the-button.apk — Android APK (debug-signed; allow installs from unknown sources)
+          - the-button-web.zip — WebAssembly, runs in any browser (serve over http, not file://)
+          EOF
+          )
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "the button $TAG" --notes "$NOTES" dist/* \
+            || gh release upload "$TAG" dist/* --clobber --repo "$GITHUB_REPOSITORY"

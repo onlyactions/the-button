@@ -1,0 +1,7 @@
+/the-button
+/the-button.exe
+/the-button-arm64.exe
+*.apk
+*.AppImage
+/dist/
+/web/
