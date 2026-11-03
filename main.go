@@ -3,138 +3,44 @@
 // the button: a single circular power button. Nothing else.
 //
 // Click it: it turns from red (off) to green (on) and back.
+//
+// Desktop entry point: a Gio window plus a system tray icon
+// (Windows: Shell_NotifyIcon; Linux: StatusNotifierItem over D-Bus)
+// that toggles the same state. The state persists across restarts.
+//
+// The Android app lives in mobile/ (the gomobile-bound API) and
+// android/ (the Gradle project); see those directories.
 package main
 
 import (
-	"image/color"
 	"log"
-	"math"
 	"os"
+	"path/filepath"
 
 	"gioui.org/app"
-	"gioui.org/f32"
-	"gioui.org/gesture"
-	"gioui.org/layout"
-	"gioui.org/op"
-	"gioui.org/op/clip"
-	"gioui.org/op/paint"
-	"gioui.org/unit"
-)
 
-var (
-	offColor = color.NRGBA{R: 0xE5, G: 0x39, B: 0x35, A: 0xFF} // red
-	onColor  = color.NRGBA{R: 0x2E, G: 0x7D, B: 0x32, A: 0xFF} // green
-	symColor = color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0xFF} // white
-	bgColor  = color.NRGBA{R: 0x00, G: 0x00, B: 0x00, A: 0xFF} // black
+	"github.com/onlyactions/the-button/internal/state"
+	"github.com/onlyactions/the-button/internal/tray"
+	"github.com/onlyactions/the-button/internal/ui"
 )
-
-// powerButton is the entire application state.
-type powerButton struct {
-	click gesture.Click
-	on    bool
-}
 
 func main() {
+	st := state.New()
+	if dir, err := os.UserConfigDir(); err == nil {
+		_ = st.SetFile(filepath.Join(dir, "the-button", "state.json"))
+	}
+
 	go func() {
 		w := new(app.Window)
-		w.Option(app.Title("the button"), app.Size(unit.Dp(320), unit.Dp(320)))
-		if err := run(w); err != nil {
+		w.Option(app.Title(ui.Title), app.Size(320, 320))
+		if err := ui.Run(w, st); err != nil {
 			log.Fatal(err)
 		}
+		// Closing the window quits the app (and with it the tray).
 		os.Exit(0)
 	}()
+
+	go tray.Run(st, ui.Title)
+
 	app.Main()
-}
-
-func run(w *app.Window) error {
-	var ops op.Ops
-	var b powerButton
-	for {
-		switch e := w.Event().(type) {
-		case app.DestroyEvent:
-			return e.Err
-		case app.FrameEvent:
-			gtx := app.NewContext(&ops, e)
-			b.layout(gtx)
-			e.Frame(gtx.Ops)
-		}
-	}
-}
-
-// layout draws one frame: a black screen with one centered circular
-// power button that toggles red/green when clicked.
-func (b *powerButton) layout(gtx layout.Context) layout.Dimensions {
-	for {
-		ev, ok := b.click.Update(gtx.Source)
-		if !ok {
-			break
-		}
-		if ev.Kind == gesture.KindClick {
-			b.on = !b.on
-		}
-	}
-
-	paint.Fill(gtx.Ops, bgColor)
-
-	sz := gtx.Constraints.Max
-	if sz.X <= 0 || sz.Y <= 0 {
-		return layout.Dimensions{Size: sz}
-	}
-	r := float32(min(sz.X, sz.Y)) * 0.40
-	if b.click.Pressed() {
-		r *= 0.93 // subtle tactile feedback while held down
-	}
-	c := f32.Pt(float32(sz.X)/2, float32(sz.Y)/2)
-
-	// The circle. Its outline doubles as the click area, so the button
-	// responds exactly to taps on the circle itself.
-	disc := clip.Outline{Path: circlePath(gtx.Ops, c, r)}.Op()
-	defer disc.Push(gtx.Ops).Pop()
-	paint.FillShape(gtx.Ops, b.color(), disc)
-	b.click.Add(gtx.Ops)
-
-	// The power symbol in the center.
-	drawPowerSymbol(gtx.Ops, c, r*0.46, r*0.13, symColor)
-
-	return layout.Dimensions{Size: sz}
-}
-
-func (b *powerButton) color() color.NRGBA {
-	if b.on {
-		return onColor
-	}
-	return offColor
-}
-
-// circlePath returns a full circle of radius r around c.
-func circlePath(ops *op.Ops, c f32.Point, r float32) clip.PathSpec {
-	var p clip.Path
-	p.Begin(ops)
-	p.MoveTo(f32.Pt(c.X+r, c.Y))
-	p.Arc(f32.Pt(-r, 0), f32.Pt(-r, 0), 2*math.Pi)
-	return p.End()
-}
-
-// drawPowerSymbol draws the power symbol: a circle broken at the
-// top, with a vertical line from the center up to the top.
-func drawPowerSymbol(ops *op.Ops, c f32.Point, r, w float32, col color.NRGBA) {
-	const gapHalf = 35 * math.Pi / 180 // 70° opening at the top
-	start := -math.Pi/2 + gapHalf
-	sweep := 2*math.Pi - 2*gapHalf
-
-	sx, sy := math.Cos(start), math.Sin(start)
-	sp := f32.Pt(c.X+r*float32(sx), c.Y+r*float32(sy))
-
-	var p clip.Path
-	p.Begin(ops)
-	p.MoveTo(sp)
-	f := f32.Pt(c.X-sp.X, c.Y-sp.Y) // focus = center, relative to pen
-	p.Arc(f, f, float32(sweep))
-	paint.FillShape(ops, col, clip.Stroke{Path: p.End(), Width: w}.Op())
-
-	var q clip.Path
-	q.Begin(ops)
-	q.MoveTo(c)
-	q.LineTo(f32.Pt(c.X, c.Y-r))
-	paint.FillShape(ops, col, clip.Stroke{Path: q.End(), Width: w}.Op())
 }

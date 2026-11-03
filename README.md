@@ -17,7 +17,7 @@ Grab a build from [Releases](../../releases):
 | `the-button-linux-x86_64.AppImage` | Linux AppImage |
 | `the-button-windows-amd64.zip` | Windows x86_64 |
 | `the-button-windows-arm64.zip` | Windows ARM64 |
-| `the-button.apk` | Android (debug-signed — allow "unknown sources") |
+| `the-button.apk` | Android (signed; app + quick-settings tile + home-screen widget) |
 | `the-button-web.zip` | any device with a browser |
 
 ### Linux notes
@@ -28,6 +28,14 @@ bundled-libEGL vs. host-driver conflicts. On a machine with a broken
 GPU driver, force software rendering:
 
     LIBGL_ALWAYS_SOFTWARE=1 ./the-button-linux-x86_64.AppImage
+
+### Android extras
+
+The single on/off state is shared by four surfaces: the app window,
+the quick-settings tile (pull down the notification shade and add
+"the button"), the home-screen widget (long-press the desktop →
+widgets → the button) and the desktop tray icon. Toggle it anywhere;
+it flips everywhere.
 
 ### Web notes
 
@@ -43,11 +51,21 @@ WebAssembly):
     CGO_ENABLED=0 GOOS=windows go build -o the-button.exe .   # Windows
     GOOS=js GOARCH=wasm go build -o web/main.wasm .            # Web (needs an index.html)
 
-Android APK (needs Android SDK + NDK):
+Android APK (needs Android SDK + NDK + JDK 17):
 
-    go install gioui.org/cmd/gogio@v0.10.3
-    gogio -target android -minsdk 24 -icon icon.png \
-        -appid com.onlyactions.thebutton -o the-button.apk .
+    go tool gomobile bind -javapkg=com.onlyactions.thebutton.bridge \
+        -target=android -androidapi 24 -o android/app/libs/thebutton.aar ./mobile
+    cd android && gradle assembleRelease
+
+`mobile/` is the Go library (`gomobile bind`) holding the state and the
+Gio window; `android/` is the Gradle project around it (activity,
+quick-settings tile, home-screen widget). The release APK is signed
+with the committed throwaway keystore `android/app/thebutton.keystore`
+(password `thebutton`) so consecutive CI builds upgrade in place.
+
+Icons are generated from the same drawing code as the app itself:
+
+    go run ./cmd/genicon
 
 Every push builds every platform and publishes the artifacts to
 GitHub Releases (see `.github/workflows/release.yml`).

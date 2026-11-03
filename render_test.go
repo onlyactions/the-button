@@ -1,5 +1,7 @@
 //go:build linux
 
+// SPDX-License-Identifier: Unlicense OR MIT
+
 package main
 
 // Renders the button offscreen (software EGL) and saves PNGs so the
@@ -15,6 +17,9 @@ import (
 	"gioui.org/layout"
 	"gioui.org/op"
 	"gioui.org/unit"
+
+	"github.com/onlyactions/the-button/internal/state"
+	"github.com/onlyactions/the-button/internal/ui"
 )
 
 func renderState(t *testing.T, w *headless.Window, on bool, path string) {
@@ -25,8 +30,11 @@ func renderState(t *testing.T, w *headless.Window, on bool, path string) {
 		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
 		Constraints: layout.Exact(image.Pt(S, S)),
 	}
-	b := powerButton{on: on}
-	b.layout(gtx)
+	st := state.New()
+	if on {
+		st.Toggle()
+	}
+	ui.New(st).Layout(gtx)
 	if err := w.Frame(&ops); err != nil {
 		t.Fatal(err)
 	}

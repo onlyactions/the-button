@@ -1,0 +1,47 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.onlyactions.thebutton'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.onlyactions.thebutton'
+        minSdk 24 // quick-settings tiles need API 24
+        targetSdk 34
+        // CI passes -PversionCode/-PversionName; local fallback keeps the
+        // last released values.
+        versionCode (project.hasProperty('versionCode') ? project.property('versionCode').toInteger() : 4)
+        versionName (project.hasProperty('versionName') ? project.property('versionName') : '0.0.4')
+    }
+
+    signingConfigs {
+        release {
+            // Stable key so consecutive builds upgrade in place. The
+            // keystore is a committed PKCS12 file (see packaging/keystore.sh).
+            storeFile file('thebutton.keystore')
+            storeType 'PKCS12'
+            storePassword 'thebutton'
+            keyAlias 'thebutton'
+            keyPassword 'thebutton'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}
+
+dependencies {
+    // Built by `gomobile bind ./mobile` (see .github/workflows/release.yml).
+    implementation files('libs/thebutton.aar')
+}

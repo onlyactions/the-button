@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">the button</string>
+    <string name="tile_label">the button</string>
+    <string name="widget_desc">the button: tap to toggle</string>
+</resources>

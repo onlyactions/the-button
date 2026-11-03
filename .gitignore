@@ -5,3 +5,9 @@
 *.AppImage
 /dist/
 /web/
+
+# Android build junk (AAR is produced by `gomobile bind` in CI)
+android/.gradle/
+android/app/build/
+android/app/libs/
+android/local.properties

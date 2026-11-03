@@ -16,7 +16,6 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  APPID: com.onlyactions.thebutton
   GOGIO: gioui.org/cmd/gogio@v0.10.3
   ANDROID_NDK_VERSION: 27.0.12077973
 
@@ -92,12 +91,22 @@ jobs:
           "$SDKM" --sdk_root="$ROOT" --install "build-tools;34.0.0" \
             "platforms;android-34" "ndk;${{ env.ANDROID_NDK_VERSION }}" > /dev/null
           echo "ANDROID_HOME=$ROOT" >> "$GITHUB_ENV"
-      - name: Install gogio
-        run: go install "$GOGIO"
-      - name: Prepare stable debug keystore
-        run: mkdir -p "$HOME/.android" && cp debug.keystore "$HOME/.android/debug.keystore"
-      - name: Build APK
-        run: gogio -target android -minsdk 24 -icon icon.png -appid "$APPID" -o the-button.apk .
+          echo "ANDROID_SDK_ROOT=$ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$ROOT/ndk/${{ env.ANDROID_NDK_VERSION }}" >> "$GITHUB_ENV"
+      - name: gomobile bind (shared Go state + Gio window for app, tile and widget)
+        run: |
+          mkdir -p android/app/libs
+          go tool gomobile bind -javapkg=com.onlyactions.thebutton.bridge \
+            -target=android -androidapi 24 -o android/app/libs/thebutton.aar ./mobile
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Build release APK
+        working-directory: android
+        run: gradle assembleRelease --no-daemon -PversionCode=${{ github.run_number }} -PversionName=0.0.${{ github.run_number }}
+      - name: Collect
+        run: cp android/app/build/outputs/apk/release/app-release.apk the-button.apk
       - uses: actions/upload-artifact@v4
         with:
           name: dist-android
@@ -144,7 +153,7 @@ jobs:
           - the-button-linux-x86_64.AppImage — Linux AppImage (uses your system graphics driver; for broken GPU drivers: LIBGL_ALWAYS_SOFTWARE=1)
           - the-button-windows-amd64.zip — Windows x86_64
           - the-button-windows-arm64.zip — Windows ARM64
-          - the-button.apk — Android APK (debug-signed; allow installs from unknown sources)
+          - the-button.apk — Android APK (signed; includes the app, a quick-settings tile and a home-screen widget)
           - the-button-web.zip — WebAssembly, runs in any browser (serve over http, not file://)
           EOF
           )
