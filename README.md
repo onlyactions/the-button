@@ -53,7 +53,7 @@ WebAssembly):
 
 Android APK (needs Android SDK + NDK + JDK 17):
 
-    go tool gomobile bind -javapkg=com.onlyactions.thebutton.bridge \
+    go tool gomobile bind -javapkg=com.onlyactions.thebutton \
         -target=android -androidapi 24 -o android/app/libs/thebutton.aar ./mobile
     cd android && gradle assembleRelease
 

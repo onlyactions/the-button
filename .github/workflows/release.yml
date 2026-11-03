@@ -97,7 +97,7 @@ jobs:
         run: |
           go tool gomobile init   # installs the gobind tool gomobile bind needs
           mkdir -p android/app/libs
-          go tool gomobile bind -javapkg=com.onlyactions.thebutton.bridge \
+          go tool gomobile bind -javapkg=com.onlyactions.thebutton \
             -target=android -androidapi 24 -o android/app/libs/thebutton.aar ./mobile
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
