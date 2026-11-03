@@ -95,6 +95,7 @@ jobs:
           echo "ANDROID_NDK_HOME=$ROOT/ndk/${{ env.ANDROID_NDK_VERSION }}" >> "$GITHUB_ENV"
       - name: gomobile bind (shared Go state + Gio window for app, tile and widget)
         run: |
+          go tool gomobile init   # installs the gobind tool gomobile bind needs
           mkdir -p android/app/libs
           go tool gomobile bind -javapkg=com.onlyactions.thebutton.bridge \
             -target=android -androidapi 24 -o android/app/libs/thebutton.aar ./mobile
