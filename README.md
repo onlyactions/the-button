@@ -7,6 +7,26 @@ Built with [Gio](https://gioui.org) — a pure Go GUI, one codebase for
 every platform: Linux, Windows, Android and the Web (WebAssembly).
 There is intentionally no macOS build.
 
+## The design
+
+The button is the only light in the room. Its face is a candy-gloss
+disc — a four-stop vertical gradient with a specular hotspot, a rim
+light along the upper-left edge and a grounding shade at the bottom —
+baked in software with float precision and ordered dithering, so it
+renders clean everywhere. Around it, a three-band halo (hot rim, mid
+haze, wide bloom) breathes when the button is on, and the room itself
+catches a wash of the button's color. The power glyph is engraved:
+an emboss shadow beneath, a highlight on its upper lip, and a bloom
+when the body is lit.
+
+It feels physical: a damped spring drives the press (the button sinks
+and its shadow tightens), releasing pops it back with a small
+overshoot, and every toggle is announced by an expanding ripple and a
+soft luminous flash — the color crossfade is lifted through light so
+it never squelches through muddy brown. On launch the whole scene
+fades from black while the glyph draws itself in: the bar first, then
+the ring sweeping symmetrically from the top gap.
+
 ## Install
 
 Grab a build from [Releases](../../releases):
